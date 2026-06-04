@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper: is the requesting user an admin?
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/admins/list) &&
+             get(/databases/$(database)/documents/admins/list).data.uids.hasAny([request.auth.uid]);
+    }
+
+    // Users: anyone authenticated can read; users write their own doc
+    match /users/{uid} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Admins list: only existing admins can write; authenticated can read
+    match /admins/list {
+      allow read:  if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    // Problems: anyone can read; only admins can write
+    match /problems/{problemId} {
+      allow read:  if true;
+      allow write: if request.auth != null && isAdmin();
+    }
+
+    // Submissions: user can read/write their own
+    match /submissions/{subId} {
+      allow read:  if request.auth != null &&
+                     resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null &&
+                      request.resource.data.userId == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // UserProblemStats: user can read/write their own
+    match /userProblemStats/{statId} {
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null &&
+                     request.resource.data.userId == request.auth.uid;
+    }
+
+    // Leaderboard: anyone can read; authenticated can write their own entry
+    match /leaderboards/{userId} {
+      allow read:  if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
